@@ -134,7 +134,7 @@ body{font-family:"Rubik",sans-serif;background:var(--bg);color:var(--text);min-h
   <div class="logo-box"><span class="material-icons-round">assignment</span></div>
   <h1>מערכת מטלות</h1>
   <p>הגשת עבודות דיגיטלית</p>
-  <div class="credit">מערכת מבחני בקרה (עם AI) • רני בן זאב • v1.0</div>
+  <div class="credit">מערכת מבחני בקרה (עם AI ומחוון) • רני בן זאב • v1.1</div>
 </div>
 <div class="role-cards">
   <button class="role-card rc-student active" onclick="switchRole('student')"><span class="rc-emoji">🎓</span><span class="rc-label">תלמיד</span></button>
@@ -1743,48 +1743,157 @@ function escapeHtmlMv(s) {
 // משתמש בפונקציה החדשה של מערכת המטלות
 var MAVCHAN_AI_URL = '/.netlify/functions/mavchan-ai';
 
-function openNewMavchanAI() {
+async function openNewMavchanAI() {
     var form = document.getElementById('mavchanForm');
     form.style.display = 'block';
-    form.innerHTML = '<h2>🤖 יצירת מבחן עם AI</h2>' +
-        '<p style="color:#6b7280;margin-bottom:14px;">תן ל-AI את הנושא או הטקסט, והוא ייצור מבחן בדיקת בקרה אוטומטית</p>' +
-        '<div class="form-group"><label>כותרת המבחן *</label>' +
-        '<input type="text" id="aiMvTitle" placeholder="לדוגמה: בדיקת הבנה - תקשורת"></div>' +
-        '<div class="form-group"><label>כיתות (מופרדות בפסיק) *</label>' +
-        '<input type="text" id="aiMvClasses" placeholder="לדוגמה: ט1, ט2"></div>' +
-        '<div class="form-group"><label>נושא או טקסט מלא לבדיקה *</label>' +
-        '<textarea id="aiMvSource" rows="6" placeholder="אפשר נושא קצר (למשל: ספירלת השתיקה) או טקסט מלא של תלמיד/מאמר/שיעור"></textarea>' +
-        '<div style="font-size:0.85rem;color:#6b7280;margin-top:4px;">💡 ככל שהקלט מפורט יותר, השאלות יהיו ספציפיות יותר</div></div>' +
-        '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:16px;">' +
-        '<div class="form-group" style="margin:0;"><label>שאלות אמריקאיות</label>' +
-        '<input type="number" id="aiMvNumChoice" value="3" min="0" max="10"></div>' +
-        '<div class="form-group" style="margin:0;"><label>שאלות פתוחות</label>' +
-        '<input type="number" id="aiMvNumOpen" value="2" min="0" max="5"></div>' +
-        '<div class="form-group" style="margin:0;"><label>זמן (דקות)</label>' +
-        '<input type="number" id="aiMvTime" value="15" min="1" max="180"></div>' +
-        '</div>' +
-        '<div style="display:flex;gap:10px;margin-top:20px;">' +
-        '<button class="btn-add" onclick="generateMavchanWithAI()" style="margin:0;background:linear-gradient(135deg,#8b5cf6,#ec4899);">🤖 צור מבחן עכשיו</button>' +
-        '<button class="btn-cancel-import" onclick="cancelMavchanForm()">❌ ביטול</button>' +
-        '</div>' +
-        '<div id="aiMvStatus" style="margin-top:14px;"></div>';
+    form.innerHTML = '<h2>🤖 יצירת מבחן עם AI - מבוסס תכנית הלימודים</h2>' +
+        '<p style="color:#6b7280;margin-bottom:14px;">בחר זירה ומושגים, וה-AI ייצור מבחן מבוסס על המושגים הרשמיים</p>' +
+        '<div id="aiMvLoading" style="background:#dbeafe;padding:14px;border-radius:10px;color:#1e40af;font-weight:700;text-align:center;">⏳ טוען מושגים מתכנית הלימודים...</div>';
+    
+    // טעינת כל המושגים מ-Supabase
+    try {
+        var allConcepts = await sbFetch('curriculum_concepts', '?order=arena.asc');
+        if (!allConcepts || !allConcepts.length) {
+            form.innerHTML = '<h2>🤖 יצירת מבחן עם AI</h2>' +
+                '<div style="background:#fee2e2;padding:14px;border-radius:10px;color:#991b1b;">❌ לא נמצאו מושגים בתכנית הלימודים. צור קשר עם המנהל.</div>' +
+                '<button class="btn-cancel-import" onclick="cancelMavchanForm()">❌ סגור</button>';
+            return;
+        }
+        
+        // קיבוץ לפי זירה
+        var byArena = {};
+        allConcepts.forEach(function(c) {
+            if (!byArena[c.arena]) byArena[c.arena] = [];
+            byArena[c.arena].push(c);
+        });
+        
+        // שמירה ב-window לגישה מהפונקציות
+        window._curriculumConcepts = allConcepts;
+        window._curriculumByArena = byArena;
+        
+        var arenaNames = Object.keys(byArena);
+        
+        var html = '<h2>🤖 יצירת מבחן עם AI - מבוסס תכנית הלימודים</h2>' +
+            '<p style="color:#6b7280;margin-bottom:14px;">המבחן יבנה רק על בסיס המושגים שתבחר מתכנית הלימודים תשפ"ו</p>' +
+            '<div class="form-group"><label>כותרת המבחן *</label>' +
+            '<input type="text" id="aiMvTitle" placeholder="לדוגמה: בקרת אמצע סמסטר - תקשורת"></div>' +
+            '<div class="form-group"><label>כיתות (מופרדות בפסיק) *</label>' +
+            '<input type="text" id="aiMvClasses" placeholder="לדוגמה: יא1, יא2"></div>' +
+            
+            '<div class="form-group"><label>בחר זירה (או "כל המושגים")</label>' +
+            '<select id="aiMvArena" onchange="updateAiMvConcepts()" style="width:100%;padding:10px;border:2px solid #e5e7eb;border-radius:8px;font-family:inherit;">' +
+            '<option value="">-- בחר זירה --</option>';
+        arenaNames.forEach(function(a) {
+            html += '<option value="' + escapeHtmlMv(a) + '">' + escapeHtmlMv(a) + ' (' + byArena[a].length + ' מושגים)</option>';
+        });
+        html += '</select></div>';
+        
+        html += '<div id="aiMvConceptsBox" style="display:none;">';
+        html += '<div class="form-group"><label>בחר מושגים (סמן הכל או חלקיים)</label>';
+        html += '<div style="display:flex;gap:8px;margin-bottom:8px;">';
+        html += '<button type="button" class="btn-preview" onclick="selectAllAiConcepts()" style="font-size:0.85rem;padding:5px 10px;">סמן הכל</button>';
+        html += '<button type="button" class="btn-preview" onclick="clearAllAiConcepts()" style="font-size:0.85rem;padding:5px 10px;">נקה הכל</button>';
+        html += '<span id="aiMvConceptCount" style="margin-right:auto;color:#6b7280;font-size:0.9rem;">0 נבחרו</span>';
+        html += '</div>';
+        html += '<div id="aiMvConceptsList" style="max-height:280px;overflow-y:auto;border:2px solid #e5e7eb;border-radius:8px;padding:10px;background:#fafafa;"></div>';
+        html += '</div></div>';
+        
+        html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:16px;">' +
+            '<div class="form-group" style="margin:0;"><label>שאלות אמריקאיות</label>' +
+            '<input type="number" id="aiMvNumChoice" value="3" min="0" max="10"></div>' +
+            '<div class="form-group" style="margin:0;"><label>שאלות פתוחות</label>' +
+            '<input type="number" id="aiMvNumOpen" value="2" min="0" max="5"></div>' +
+            '<div class="form-group" style="margin:0;"><label>זמן (דקות)</label>' +
+            '<input type="number" id="aiMvTime" value="15" min="1" max="180"></div>' +
+            '</div>';
+        
+        html += '<div class="form-group"><label>הקשר/הנחיות נוספות (אופציונלי)</label>' +
+            '<textarea id="aiMvContext" rows="2" placeholder="לדוגמה: מבחן בעקבות שיעור על דוגמאות מהמלחמה האחרונה"></textarea></div>';
+        
+        html += '<div style="display:flex;gap:10px;margin-top:20px;">' +
+            '<button class="btn-add" onclick="generateMavchanWithAI()" style="margin:0;background:linear-gradient(135deg,#8b5cf6,#ec4899);">🤖 צור מבחן עכשיו</button>' +
+            '<button class="btn-cancel-import" onclick="cancelMavchanForm()">❌ ביטול</button>' +
+            '</div>' +
+            '<div id="aiMvStatus" style="margin-top:14px;"></div>';
+        
+        form.innerHTML = html;
+        
+    } catch (err) {
+        form.innerHTML = '<h2>🤖 יצירת מבחן עם AI</h2>' +
+            '<div style="background:#fee2e2;padding:14px;border-radius:10px;color:#991b1b;">❌ שגיאה בטעינה: ' + err.message + '</div>' +
+            '<button class="btn-cancel-import" onclick="cancelMavchanForm()">❌ סגור</button>';
+    }
+}
+
+function updateAiMvConcepts() {
+    var arena = document.getElementById('aiMvArena').value;
+    var box = document.getElementById('aiMvConceptsBox');
+    var listEl = document.getElementById('aiMvConceptsList');
+    
+    if (!arena) {
+        box.style.display = 'none';
+        return;
+    }
+    
+    var concepts = window._curriculumByArena[arena] || [];
+    var html = '';
+    concepts.forEach(function(c) {
+        html += '<label style="display:flex;align-items:flex-start;gap:8px;padding:6px;cursor:pointer;border-radius:4px;" onmouseover="this.style.background=\'#f3f4f6\'" onmouseout="this.style.background=\'transparent\'">';
+        html += '<input type="checkbox" data-concept-id="' + c.id + '" onchange="updateAiConceptCount()" style="margin-top:3px;flex-shrink:0;">';
+        html += '<div style="flex:1;">';
+        html += '<div style="font-weight:700;color:#1f2937;">' + escapeHtmlMv(c.concept) + '</div>';
+        html += '<div style="font-size:0.85rem;color:#6b7280;margin-top:2px;">' + escapeHtmlMv(c.definition.substring(0, 120)) + (c.definition.length > 120 ? '...' : '') + '</div>';
+        html += '</div>';
+        html += '</label>';
+    });
+    listEl.innerHTML = html;
+    box.style.display = 'block';
+    updateAiConceptCount();
+}
+
+function updateAiConceptCount() {
+    var count = document.querySelectorAll('#aiMvConceptsList input:checked').length;
+    document.getElementById('aiMvConceptCount').textContent = count + ' נבחרו';
+}
+
+function selectAllAiConcepts() {
+    document.querySelectorAll('#aiMvConceptsList input').forEach(function(c) { c.checked = true; });
+    updateAiConceptCount();
+}
+
+function clearAllAiConcepts() {
+    document.querySelectorAll('#aiMvConceptsList input').forEach(function(c) { c.checked = false; });
+    updateAiConceptCount();
 }
 
 async function generateMavchanWithAI() {
     var title = document.getElementById('aiMvTitle').value.trim();
     var classes = document.getElementById('aiMvClasses').value.trim();
-    var source = document.getElementById('aiMvSource').value.trim();
+    var context = document.getElementById('aiMvContext').value.trim();
     var numChoice = parseInt(document.getElementById('aiMvNumChoice').value) || 0;
     var numOpen = parseInt(document.getElementById('aiMvNumOpen').value) || 0;
     var time = parseInt(document.getElementById('aiMvTime').value) || 15;
     
+    // איסוף המושגים שנבחרו
+    var selectedIds = [];
+    document.querySelectorAll('#aiMvConceptsList input:checked').forEach(function(c) {
+        selectedIds.push(parseInt(c.dataset.conceptId));
+    });
+    
     if (!title) return toast('⚠️ יש להזין כותרת');
     if (!classes) return toast('⚠️ יש להזין כיתות');
-    if (!source || source.length < 20) return toast('⚠️ יש להזין נושא או טקסט (לפחות 20 תווים)');
+    if (!selectedIds.length) return toast('⚠️ יש לבחור לפחות מושג אחד');
     if (numChoice + numOpen === 0) return toast('⚠️ יש להזין לפחות שאלה אחת');
     
+    // איסוף המושגים המלאים מ-window
+    var selectedConcepts = (window._curriculumConcepts || []).filter(function(c) {
+        return selectedIds.includes(c.id);
+    });
+    
+    if (!selectedConcepts.length) return toast('⚠️ שגיאה - לא נמצאו המושגים שנבחרו');
+    
     var statusEl = document.getElementById('aiMvStatus');
-    statusEl.innerHTML = '<div style="background:#dbeafe;padding:14px;border-radius:10px;color:#1e40af;font-weight:700;">🤖 ה-AI יוצר את השאלות... זה יכול לקחת 10-30 שניות</div>';
+    statusEl.innerHTML = '<div style="background:#dbeafe;padding:14px;border-radius:10px;color:#1e40af;font-weight:700;">🤖 ה-AI יוצר את השאלות מבוסס על ' + selectedConcepts.length + ' מושגים... זה יכול לקחת 10-30 שניות</div>';
     
     var btn = document.querySelector('#mavchanForm .btn-add');
     if (btn) btn.disabled = true;
@@ -1795,9 +1904,12 @@ async function generateMavchanWithAI() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 action: 'generate_test',
-                topic: source,
+                concepts: selectedConcepts.map(function(c) {
+                    return { concept: c.concept, definition: c.definition, arena: c.arena };
+                }),
                 num_choice: numChoice,
-                num_open: numOpen
+                num_open: numOpen,
+                additional_topic: context
             })
         });
         
@@ -1811,27 +1923,39 @@ async function generateMavchanWithAI() {
         
         var generatedQuestions = data.questions;
         if (!generatedQuestions || !generatedQuestions.length) {
-            statusEl.innerHTML = '<div style="background:#fee2e2;padding:14px;border-radius:10px;color:#991b1b;">❌ ה-AI לא הצליח ליצור שאלות. נסה שוב או הוסף יותר פרטים בנושא.</div>';
+            statusEl.innerHTML = '<div style="background:#fee2e2;padding:14px;border-radius:10px;color:#991b1b;">❌ ה-AI לא הצליח ליצור שאלות. נסה שוב.</div>';
             if (btn) btn.disabled = false;
             return;
         }
         
-        // המרה לפורמט שלנו (הוספת _qid)
+        // המרה לפורמט שלנו (הוספת _qid + שמירת המושג)
         mavchanimQuestions = generatedQuestions.map(function(q) {
             var nq = Object.assign({}, q, { _qid: 'q' + Math.random().toString(36).substr(2, 6) });
             if (!nq.points) nq.points = nq.type === 'choice' ? 5 : 10;
+            // שמירת המושג שעליו השאלה (לבדיקת תשובות עם מחוון)
+            if (q.based_on_concept) {
+                var matched = selectedConcepts.find(function(c) { 
+                    return c.concept === q.based_on_concept || q.based_on_concept.includes(c.concept);
+                });
+                if (matched) {
+                    nq.concept_name = matched.concept;
+                    nq.concept_definition = matched.definition;
+                }
+            }
             return nq;
         });
         
-        statusEl.innerHTML = '<div style="background:#d1fae5;padding:14px;border-radius:10px;color:#065f46;font-weight:700;">✅ נוצרו ' + mavchanimQuestions.length + ' שאלות! תוכל לערוך/למחוק/להוסיף לפני שמירה</div>';
+        statusEl.innerHTML = '<div style="background:#d1fae5;padding:14px;border-radius:10px;color:#065f46;font-weight:700;">✅ נוצרו ' + mavchanimQuestions.length + ' שאלות מבוססות תכנית הלימודים! תוכל לערוך לפני שמירה</div>';
         
-        // מעבר לטופס הרגיל עם הערכים שכבר הוזנו
+        // מעבר לטופס הרגיל
         setTimeout(function() {
             mavchanimEditing = null;
+            var conceptsSummary = selectedConcepts.slice(0, 3).map(function(c) { return c.concept; }).join(', ');
+            if (selectedConcepts.length > 3) conceptsSummary += '...';
             renderMavchanForm({
                 title: title,
                 classes: classes,
-                description: 'נוצר אוטומטית מ: ' + source.substring(0, 100) + (source.length > 100 ? '...' : ''),
+                description: 'מבחן בקרה על: ' + conceptsSummary,
                 time_limit_minutes: time,
                 max_attempts: 1,
                 lock_after_exits: 3
@@ -1860,7 +1984,9 @@ async function gradeOpenAnswerWithAI(question, studentAnswer, maxPoints) {
                 question: question.text,
                 expected_answer: question.expected_answer || '',
                 student_answer: studentAnswer,
-                max_points: maxPoints
+                max_points: maxPoints,
+                concept_name: question.concept_name || '',
+                concept_definition: question.concept_definition || ''
             })
         });
         
