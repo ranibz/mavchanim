@@ -134,7 +134,7 @@ body{font-family:"Rubik",sans-serif;background:var(--bg);color:var(--text);min-h
   <div class="logo-box"><span class="material-icons-round">assignment</span></div>
   <h1>מערכת מטלות</h1>
   <p>הגשת עבודות דיגיטלית</p>
-  <div class="credit">מערכת מבחני בקרה (עם AI ומחוון) • רני בן זאב • v1.1</div>
+  <div class="credit">מערכת מבחני בקרה (עם AI ומחוון) • רני בן זאב • v1.2</div>
 </div>
 <div class="role-cards">
   <button class="role-card rc-student active" onclick="switchRole('student')"><span class="rc-emoji">🎓</span><span class="rc-label">תלמיד</span></button>
@@ -1716,12 +1716,41 @@ async function viewAttemptDetail(attemptId) {
             html += '<div style="font-weight:700;margin-bottom:6px;">' + qNum + '. ' + escapeHtmlMv(q.text || '') + correct + '</div>';
             html += '<div style="color:#374151;padding:8px;background:#f3f4f6;border-radius:6px;">תשובה: ' + (typeof ans === 'string' ? escapeHtmlMv(ans) : ans) + '</div>';
             
-            // הצגת ציון AI אם קיים
-            if (q.type === 'text' && aiGrades['q_' + idx]) {
-                var aiG = aiGrades['q_' + idx];
-                html += '<div style="margin-top:8px;padding:10px;background:linear-gradient(135deg,#ede9fe,#fce7f3);border-radius:8px;border-right:4px solid #8b5cf6;">';
-                html += '<div style="font-weight:700;color:#6b21a8;margin-bottom:4px;">🤖 הערכת AI: ' + (aiG.score || 0) + '/' + (q.points || 10) + ' נקודות</div>';
-                html += '<div style="color:#374151;font-size:0.95rem;">' + escapeHtmlMv(aiG.feedback || '') + '</div>';
+            // לשאלות פתוחות - הצגת המושג הקשור (אם יש), הערכת AI והערכה ידנית
+            if (q.type === 'text') {
+                // הצגת המושג שעליו השאלה (מחוון)
+                if (q.concept_name && q.concept_definition) {
+                    html += '<div style="margin-top:8px;padding:10px;background:#fef3c7;border-radius:8px;border-right:4px solid #f59e0b;font-size:0.9rem;">';
+                    html += '<div style="font-weight:700;color:#92400e;margin-bottom:4px;">📋 מחוון - ' + escapeHtmlMv(q.concept_name) + '</div>';
+                    html += '<div style="color:#78350f;">' + escapeHtmlMv(q.concept_definition.substring(0, 300)) + (q.concept_definition.length > 300 ? '...' : '') + '</div>';
+                    html += '</div>';
+                }
+                
+                // הערכת AI (אם נבדק)
+                if (aiGrades['q_' + idx]) {
+                    var aiG = aiGrades['q_' + idx];
+                    html += '<div style="margin-top:8px;padding:10px;background:linear-gradient(135deg,#ede9fe,#fce7f3);border-radius:8px;border-right:4px solid #8b5cf6;">';
+                    html += '<div style="font-weight:700;color:#6b21a8;margin-bottom:4px;">🤖 הערכת AI: ' + (aiG.score || 0) + '/' + (q.points || 10) + ' נקודות</div>';
+                    html += '<div style="color:#374151;font-size:0.95rem;">' + escapeHtmlMv(aiG.feedback || '') + '</div>';
+                    html += '</div>';
+                }
+                
+                // שדה הערכה ידנית למורה
+                var manualGrades = a.manual_grades || {};
+                var existingGrade = manualGrades['q_' + idx] || {};
+                var maxPts = q.points || 10;
+                html += '<div style="margin-top:8px;padding:10px;background:#dbeafe;border-radius:8px;border-right:4px solid #2563eb;">';
+                html += '<div style="font-weight:700;color:#1e40af;margin-bottom:6px;">✍️ הערכה ידנית של המורה</div>';
+                html += '<div style="display:flex;gap:8px;align-items:center;margin-bottom:6px;">';
+                html += '<label style="font-size:0.9rem;font-weight:600;color:#1e3a8a;">ציון:</label>';
+                html += '<input type="number" id="manualScore_' + attemptId + '_' + idx + '" min="0" max="' + maxPts + '" value="' + (existingGrade.score !== undefined ? existingGrade.score : '') + '" placeholder="0-' + maxPts + '" style="width:80px;padding:6px;border:1px solid #93c5fd;border-radius:6px;">';
+                html += '<span style="font-size:0.9rem;color:#1e3a8a;">/ ' + maxPts + '</span>';
+                html += '</div>';
+                html += '<textarea id="manualFeedback_' + attemptId + '_' + idx + '" placeholder="הערות והערכה מילולית (אופציונלי)..." style="width:100%;padding:8px;border:1px solid #93c5fd;border-radius:6px;font-family:inherit;font-size:0.9rem;min-height:50px;">' + escapeHtmlMv(existingGrade.feedback || '') + '</textarea>';
+                html += '<button class="btn-preview" onclick="saveManualGrade(\'' + attemptId + '\',' + idx + ',' + maxPts + ')" style="margin-top:6px;font-size:0.85rem;">💾 שמור הערכה</button>';
+                if (existingGrade.score !== undefined) {
+                    html += ' <span style="color:#065f46;font-size:0.85rem;font-weight:700;">✓ נשמר</span>';
+                }
                 html += '</div>';
             }
             
@@ -2012,6 +2041,45 @@ async function gradeOpenAnswerWithAI(question, studentAnswer, maxPoints) {
 }
 
 // כפתור לבדיקה אוטומטית של כל התשובות הפתוחות בדף תוצאות התלמיד
+async function saveManualGrade(attemptId, qIdx, maxPts) {
+    var scoreEl = document.getElementById('manualScore_' + attemptId + '_' + qIdx);
+    var feedbackEl = document.getElementById('manualFeedback_' + attemptId + '_' + qIdx);
+    if (!scoreEl) return;
+    
+    var scoreVal = scoreEl.value.trim();
+    var feedback = feedbackEl ? feedbackEl.value.trim() : '';
+    
+    if (scoreVal === '') return toast('⚠️ יש להזין ציון');
+    
+    var score = parseInt(scoreVal);
+    if (isNaN(score) || score < 0 || score > maxPts) {
+        return toast('⚠️ הציון חייב להיות בין 0 ל-' + maxPts);
+    }
+    
+    try {
+        var atts = await sbFetch('mavchan_attempts', '?id=eq.' + attemptId);
+        if (!atts.length) return toast('⚠️ הניסיון לא נמצא');
+        var a = atts[0];
+        
+        var manualGrades = a.manual_grades || {};
+        manualGrades['q_' + qIdx] = {
+            score: score,
+            feedback: feedback,
+            graded_at: Date.now()
+        };
+        
+        await sbUpdate('mavchan_attempts', '?id=eq.' + attemptId, {
+            manual_grades: manualGrades
+        });
+        
+        toast('✅ נשמר');
+        // רענון התצוגה
+        showAttemptDetail(attemptId);
+    } catch (err) {
+        toast('❌ שגיאה: ' + err.message);
+    }
+}
+
 async function autoGradeOpenAnswers(attemptId) {
     var btn = document.querySelector('button[data-grade-id="' + attemptId + '"]');
     if (btn) { btn.disabled = true; btn.textContent = '🤖 בודק...'; }
