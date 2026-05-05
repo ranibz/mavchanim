@@ -1,6 +1,5 @@
 // netlify/functions/mavchan-ai.js
-// פונקציה לבניית ובדיקת מבחני בקרה עם Gemini - מבוססת על תכנית הלימודים
-// גרסה: 2.0.0 | תאריך: 2026-05-05
+// גרסה: 2.1.0 | תאריך: 2026-05-05 - עם דיבוג
 
 exports.handler = async function(event, context) {
     const headers = {
@@ -18,122 +17,103 @@ exports.handler = async function(event, context) {
         return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method not allowed' }) };
     }
 
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
-        return { statusCode: 500, headers, body: JSON.stringify({ error: 'API key not configured' }) };
-    }
-
-    let body;
     try {
-        body = JSON.parse(event.body || '{}');
-    } catch (e) {
-        return { statusCode: 400, headers, body: JSON.stringify({ error: 'Invalid JSON' }) };
-    }
-
-    const action = body.action;
-    if (!action) {
-        return { statusCode: 400, headers, body: JSON.stringify({ error: 'Missing action' }) };
-    }
-
-    let prompt = '';
-
-    if (action === 'generate_test') {
-        const { concepts, num_choice, num_open, additional_topic } = body;
-        
-        if (!concepts || !Array.isArray(concepts) || !concepts.length) {
-            return { statusCode: 400, headers, body: JSON.stringify({ error: 'נדרשים מושגים מתכנית הלימודים' }) };
+        const apiKey = process.env.GEMINI_API_KEY;
+        if (!apiKey) {
+            return { statusCode: 500, headers, body: JSON.stringify({ error: 'API key not configured', debug: 'no_api_key' }) };
         }
 
-        const totalQ = (num_choice || 0) + (num_open || 0);
-        if (totalQ === 0) {
-            return { statusCode: 400, headers, body: JSON.stringify({ error: 'נדרשת לפחות שאלה אחת' }) };
+        let body;
+        try {
+            body = JSON.parse(event.body || '{}');
+        } catch (e) {
+            return { statusCode: 400, headers, body: JSON.stringify({ error: 'Invalid JSON', debug: e.message }) };
         }
 
-        let conceptsList = '';
-        concepts.forEach((c, i) => {
-            conceptsList += `\n${i+1}. **${c.concept}** (${c.arena})\n   הגדרה: ${c.definition}\n`;
-        });
-
-        prompt = `אתה מורה לתקשורת בתיכון בישראל הבונה מבחן בדיקת הבנה לתלמידים.
-
-המבחן חייב להיות מבוסס על המושגים הבאים מתכנית הלימודים תשפ"ו (האגרון הרשמי):
-${conceptsList}
-
-${additional_topic ? `הקשר נוסף: ${additional_topic}\n` : ''}
-
-המשימה: בנה מבחן בעברית עם בדיוק:
-- ${num_choice || 0} שאלות בחירה מרובה (4 אפשרויות, תשובה נכונה אחת)
-- ${num_open || 0} שאלות פתוחות (הסבר במילים שלך)
-
-הנחיות חשובות:
-1. **חובה: כל שאלה חייבת להיות מבוססת על אחד מהמושגים שנמסרו לעיל - אל תמציא תוכן חדש**
-2. השאלות צריכות לבדוק הבנה אמיתית של המושגים, לא שינון
-3. בשאלות פתוחות - שאל את התלמיד להסביר את המושג, לתת דוגמה, או ליישם אותו
-4. בבחירה מרובה - הסחות הדעת חייבות להיות סבירות אבל לא נכונות
-5. כתוב את הכל בעברית, השתמש בפירושים שניתנו כסטנדרט לתשובה הנכונה
-6. גוון בין המושגים - אל תשאל את כל השאלות על מושג אחד
-
-החזר JSON תקין בלבד (ללא טקסט נוסף, ללא backticks):
-{
-  "questions": [
-    {
-      "type": "choice",
-      "text": "השאלה כאן?",
-      "options": ["אופציה 1", "אופציה 2", "אופציה 3", "אופציה 4"],
-      "correct_answer": "אופציה 1",
-      "points": 5,
-      "based_on_concept": "שם המושג שעליו השאלה"
-    },
-    {
-      "type": "text",
-      "text": "השאלה הפתוחה?",
-      "points": 10,
-      "expected_answer": "תיאור קצר של מה תשובה טובה אמורה לכלול",
-      "based_on_concept": "שם המושג שעליו השאלה"
-    }
-  ]
-}`;
-
-    } else if (action === 'grade_answer') {
-        const { question, expected_answer, student_answer, max_points, concept_name, concept_definition } = body;
-        if (!question || !student_answer) {
-            return { statusCode: 400, headers, body: JSON.stringify({ error: 'חסרים פרטים' }) };
+        const action = body.action;
+        if (!action) {
+            return { statusCode: 400, headers, body: JSON.stringify({ error: 'Missing action' }) };
         }
 
-        prompt = `אתה מורה לתקשורת בתיכון בישראל הבודק תשובה של תלמיד.
+        let prompt = '';
 
-השאלה: ${question}
+        if (action === 'generate_test') {
+            const concepts = body.concepts;
+            const num_choice = body.num_choice;
+            const num_open = body.num_open;
+            const additional_topic = body.additional_topic;
+            
+            if (!concepts || !Array.isArray(concepts) || !concepts.length) {
+                return { statusCode: 400, headers, body: JSON.stringify({ error: 'נדרשים מושגים מתכנית הלימודים' }) };
+            }
 
-${concept_name && concept_definition ? `המושג שעליו השאלה: **${concept_name}**
-ההגדרה הרשמית מתכנית הלימודים: ${concept_definition}
+            const totalQ = (num_choice || 0) + (num_open || 0);
+            if (totalQ === 0) {
+                return { statusCode: 400, headers, body: JSON.stringify({ error: 'נדרשת לפחות שאלה אחת' }) };
+            }
 
-` : ''}${expected_answer ? `מה התשובה אמורה לכלול: ${expected_answer}
+            let conceptsList = '';
+            concepts.forEach(function(c, i) {
+                conceptsList += '\n' + (i+1) + '. **' + c.concept + '** (' + c.arena + ')\n   הגדרה: ' + c.definition + '\n';
+            });
 
-` : ''}תשובת התלמיד:
-"""
-${student_answer}
-"""
+            prompt = 'אתה מורה לתקשורת בתיכון בישראל הבונה מבחן בדיקת הבנה לתלמידים.\n\n' +
+                'המבחן חייב להיות מבוסס על המושגים הבאים מתכנית הלימודים תשפ"ו (האגרון הרשמי):\n' +
+                conceptsList + '\n' +
+                (additional_topic ? 'הקשר נוסף: ' + additional_topic + '\n' : '') + '\n' +
+                'המשימה: בנה מבחן בעברית עם בדיוק:\n' +
+                '- ' + (num_choice || 0) + ' שאלות בחירה מרובה (4 אפשרויות, תשובה נכונה אחת)\n' +
+                '- ' + (num_open || 0) + ' שאלות פתוחות (הסבר במילים שלך)\n\n' +
+                'הנחיות חשובות:\n' +
+                '1. **חובה: כל שאלה חייבת להיות מבוססת על אחד מהמושגים שנמסרו לעיל - אל תמציא תוכן חדש**\n' +
+                '2. השאלות צריכות לבדוק הבנה אמיתית של המושגים, לא שינון\n' +
+                '3. בשאלות פתוחות - שאל את התלמיד להסביר את המושג, לתת דוגמה, או ליישם אותו\n' +
+                '4. בבחירה מרובה - הסחות הדעת חייבות להיות סבירות אבל לא נכונות\n' +
+                '5. כתוב את הכל בעברית, השתמש בפירושים שניתנו כסטנדרט לתשובה הנכונה\n' +
+                '6. גוון בין המושגים - אל תשאל את כל השאלות על מושג אחד\n\n' +
+                'החזר JSON תקין בלבד (ללא טקסט נוסף, ללא backticks):\n' +
+                '{\n' +
+                '  "questions": [\n' +
+                '    {"type": "choice", "text": "השאלה?", "options": ["1","2","3","4"], "correct_answer": "1", "points": 5, "based_on_concept": "שם המושג"},\n' +
+                '    {"type": "text", "text": "השאלה?", "points": 10, "expected_answer": "תיאור קצר", "based_on_concept": "שם המושג"}\n' +
+                '  ]\n' +
+                '}';
 
-המשימה: תן ציון מ-0 עד ${max_points || 10} לתשובת התלמיד.
+        } else if (action === 'grade_answer') {
+            const question = body.question;
+            const expected_answer = body.expected_answer;
+            const student_answer = body.student_answer;
+            const max_points = body.max_points;
+            const concept_name = body.concept_name;
+            const concept_definition = body.concept_definition;
+            
+            if (!question || !student_answer) {
+                return { statusCode: 400, headers, body: JSON.stringify({ error: 'חסרים פרטים', debug: { hasQuestion: !!question, hasAnswer: !!student_answer } }) };
+            }
 
-הנחיות הציון:
-1. **השווה את התשובה להגדרה הרשמית** - האם התלמיד הבין את המושג?
-2. ציון 0 = לא ענה / תשובה לא קשורה / מוטעית לחלוטין
-3. ציון מלא = תשובה מלאה, מדויקת, מנומקת, תואמת להגדרה הרשמית
-4. ציון אמצעי = תשובה חלקית - מבין את הרעיון אבל חסר/לא מדויק
-5. ההערכה צריכה להיות 1-2 משפטים בעברית שמסבירים מה היה טוב ומה היה חסר
-6. תהיה הוגן אבל קפדן - לא לתת ציון מלא לתשובה שטחית
+            prompt = 'אתה מורה לתקשורת בתיכון בישראל הבודק תשובה של תלמיד.\n\n' +
+                'השאלה: ' + question + '\n\n' +
+                (concept_name && concept_definition ? 
+                    'המושג שעליו השאלה: **' + concept_name + '**\nההגדרה הרשמית מתכנית הלימודים: ' + concept_definition + '\n\n' : '') +
+                (expected_answer ? 'מה התשובה אמורה לכלול: ' + expected_answer + '\n\n' : '') +
+                'תשובת התלמיד:\n"""\n' + student_answer + '\n"""\n\n' +
+                'המשימה: תן ציון מ-0 עד ' + (max_points || 10) + ' לתשובת התלמיד.\n\n' +
+                'הנחיות הציון:\n' +
+                '1. **השווה את התשובה להגדרה הרשמית** - האם התלמיד הבין את המושג?\n' +
+                '2. ציון 0 = לא ענה / תשובה לא קשורה / מוטעית לחלוטין\n' +
+                '3. ציון מלא = תשובה מלאה, מדויקת, מנומקת\n' +
+                '4. ציון אמצעי = תשובה חלקית\n' +
+                '5. ההערכה צריכה להיות 1-2 משפטים בעברית\n' +
+                '6. תהיה הוגן אבל קפדן\n\n' +
+                'החזר JSON תקין בלבד:\n' +
+                '{"score": <מספר>, "feedback": "<הערכה מילולית>"}';
 
-החזר JSON תקין בלבד:
-{"score": <מספר>, "feedback": "<הערכה מילולית>"}`;
+        } else {
+            return { statusCode: 400, headers, body: JSON.stringify({ error: 'Invalid action' }) };
+        }
 
-    } else {
-        return { statusCode: 400, headers, body: JSON.stringify({ error: 'Invalid action' }) };
-    }
-
-    // קריאה ל-Gemini
-    try {
-        const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+        // קריאה ל-Gemini
+        const geminiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + apiKey;
         
         const response = await fetch(geminiUrl, {
             method: 'POST',
@@ -150,14 +130,29 @@ ${student_answer}
 
         if (!response.ok) {
             const errText = await response.text();
-            return { statusCode: 500, headers, body: JSON.stringify({ error: 'שגיאה בקריאה ל-Gemini', details: errText.substring(0, 500) }) };
+            return { 
+                statusCode: 500, 
+                headers, 
+                body: JSON.stringify({ 
+                    error: 'שגיאה בקריאה ל-Gemini', 
+                    statusCode: response.status,
+                    details: errText.substring(0, 1000) 
+                }) 
+            };
         }
 
         const data = await response.json();
-        const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+        const text = data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts && data.candidates[0].content.parts[0] && data.candidates[0].content.parts[0].text || '';
         
         if (!text) {
-            return { statusCode: 500, headers, body: JSON.stringify({ error: 'תגובה ריקה מ-Gemini' }) };
+            return { 
+                statusCode: 500, 
+                headers, 
+                body: JSON.stringify({ 
+                    error: 'תגובה ריקה מ-Gemini',
+                    raw_response: JSON.stringify(data).substring(0, 1000)
+                }) 
+            };
         }
 
         let parsed;
@@ -168,16 +163,37 @@ ${student_answer}
             if (match) {
                 try { parsed = JSON.parse(match[0]); }
                 catch (e2) {
-                    return { statusCode: 500, headers, body: JSON.stringify({ error: 'לא ניתן לפרסר את התגובה' }) };
+                    return { 
+                        statusCode: 500, 
+                        headers, 
+                        body: JSON.stringify({ 
+                            error: 'לא ניתן לפרסר את התגובה', 
+                            raw: text.substring(0, 1000) 
+                        }) 
+                    };
                 }
             } else {
-                return { statusCode: 500, headers, body: JSON.stringify({ error: 'אין JSON בתגובה' }) };
+                return { 
+                    statusCode: 500, 
+                    headers, 
+                    body: JSON.stringify({ 
+                        error: 'אין JSON בתגובה', 
+                        raw: text.substring(0, 1000) 
+                    }) 
+                };
             }
         }
 
         return { statusCode: 200, headers, body: JSON.stringify(parsed) };
 
     } catch (err) {
-        return { statusCode: 500, headers, body: JSON.stringify({ error: 'שגיאה: ' + err.message }) };
+        return { 
+            statusCode: 500, 
+            headers, 
+            body: JSON.stringify({ 
+                error: 'שגיאה כללית: ' + err.message,
+                stack: err.stack ? err.stack.substring(0, 1000) : 'no stack'
+            }) 
+        };
     }
 };
