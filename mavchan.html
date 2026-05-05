@@ -1,0 +1,909 @@
+<!DOCTYPE html>
+<!-- גרסה: 1.1.0 | תאריך: 2026-05-04 | אין מסך כניסה - פרטי תלמיד מגיעים מ-URL ?id=XXX&student=YYY דרך מערכת המטלות -->
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>מבחן בקרה</title>
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;700;900&display=swap" rel="stylesheet">
+<style>
+:root {
+    --primary: #6c5ce7;
+    --primary-dark: #5f48d4;
+    --bg: #f5f3ff;
+    --card: #ffffff;
+    --text: #2d3436;
+    --text-dim: #636e72;
+    --border: #e5e0fa;
+    --danger: #e74c3c;
+    --success: #00b894;
+    --warning: #fdcb6e;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+    font-family: 'Heebo', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    line-height: 1.6;
+}
+
+/* מסך כניסה */
+.login-screen, .info-screen {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+.login-card {
+    background: white;
+    border-radius: 18px;
+    padding: 32px;
+    max-width: 480px;
+    width: 100%;
+    box-shadow: 0 8px 30px rgba(0,0,0,0.1);
+}
+.login-card h1 {
+    color: var(--primary);
+    font-size: 1.6rem;
+    margin-bottom: 8px;
+    text-align: center;
+}
+.login-card .subtitle {
+    text-align: center;
+    color: var(--text-dim);
+    margin-bottom: 24px;
+}
+.test-meta {
+    background: var(--bg);
+    padding: 14px 16px;
+    border-radius: 12px;
+    margin-bottom: 18px;
+    border-right: 4px solid var(--primary);
+}
+.test-meta .row {
+    display: flex;
+    justify-content: space-between;
+    padding: 4px 0;
+    font-size: 0.9rem;
+}
+.test-meta .row strong { color: var(--primary); }
+
+label {
+    display: block;
+    font-weight: 700;
+    margin-bottom: 6px;
+}
+input[type="text"], input[type="number"], textarea {
+    width: 100%;
+    padding: 12px 14px;
+    border: 2px solid var(--border);
+    border-radius: 10px;
+    font-family: inherit;
+    font-size: 1rem;
+}
+input.id-input {
+    text-align: center;
+    font-size: 1.3rem;
+    letter-spacing: 4px;
+    direction: ltr;
+    font-weight: 700;
+}
+input:focus, textarea:focus { outline: none; border-color: var(--primary); }
+
+.btn {
+    background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+    color: white;
+    border: none;
+    padding: 14px 24px;
+    border-radius: 12px;
+    font-size: 1rem;
+    font-weight: 700;
+    font-family: inherit;
+    cursor: pointer;
+    width: 100%;
+    margin-top: 10px;
+    transition: transform 0.15s;
+}
+.btn:hover:not(:disabled) { transform: translateY(-2px); }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-danger { background: linear-gradient(135deg, var(--danger), #f57272); }
+.btn-success { background: linear-gradient(135deg, var(--success), #55efc4); }
+
+.warning-box {
+    background: #fff8e1;
+    border: 2px solid var(--warning);
+    border-radius: 12px;
+    padding: 14px 16px;
+    margin-bottom: 16px;
+    font-size: 0.9rem;
+    line-height: 1.6;
+}
+.warning-box strong { color: #c47800; }
+.warning-box ul { margin: 8px 18px 0; }
+
+.error-msg {
+    background: #ffe0e0;
+    color: var(--danger);
+    padding: 10px 14px;
+    border-radius: 8px;
+    margin-top: 12px;
+    font-weight: 500;
+}
+
+/* מסך המבחן */
+.exam-screen {
+    display: none;
+    min-height: 100vh;
+    background: var(--bg);
+}
+.exam-header {
+    background: white;
+    padding: 14px 20px;
+    border-bottom: 2px solid var(--border);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    flex-wrap: wrap;
+    gap: 10px;
+}
+.exam-title {
+    font-weight: 900;
+    color: var(--primary);
+    font-size: 1.1rem;
+}
+.exam-info {
+    display: flex;
+    gap: 16px;
+    align-items: center;
+    font-size: 0.85rem;
+    color: var(--text-dim);
+}
+.timer {
+    background: var(--primary);
+    color: white;
+    padding: 8px 16px;
+    border-radius: 20px;
+    font-weight: 900;
+    font-family: 'Courier New', monospace;
+    font-size: 1.05rem;
+    min-width: 90px;
+    text-align: center;
+}
+.timer.warning { background: var(--warning); color: var(--text); }
+.timer.danger { background: var(--danger); animation: pulse 1s infinite; }
+@keyframes pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+}
+.exit-counter {
+    background: var(--bg);
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 0.85rem;
+    color: var(--text-dim);
+}
+.exit-counter.danger { background: #ffe0e0; color: var(--danger); font-weight: 700; }
+
+.exam-body {
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 20px 16px 100px;
+}
+.question-card {
+    background: white;
+    border-radius: 14px;
+    padding: 22px;
+    margin-bottom: 14px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+}
+.question-num {
+    background: var(--primary);
+    color: white;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    margin-left: 10px;
+}
+.question-text {
+    font-weight: 700;
+    font-size: 1.05rem;
+    margin-bottom: 14px;
+    line-height: 1.5;
+}
+.question-points {
+    color: var(--text-dim);
+    font-size: 0.85rem;
+    margin-right: 8px;
+}
+
+/* בחירה מרובה */
+.choice-option {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 12px 16px;
+    margin-bottom: 8px;
+    background: var(--bg);
+    border-radius: 10px;
+    cursor: pointer;
+    border: 2px solid transparent;
+    transition: border-color 0.15s, background 0.15s;
+}
+.choice-option:hover { background: #ede9fe; }
+.choice-option input { width: 20px; height: 20px; cursor: pointer; }
+.choice-option.selected {
+    border-color: var(--primary);
+    background: #ede9fe;
+    font-weight: 700;
+}
+
+/* כפתור הגשה */
+.submit-bar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: white;
+    padding: 14px 20px;
+    border-top: 2px solid var(--border);
+    box-shadow: 0 -4px 16px rgba(0,0,0,0.08);
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+}
+.submit-bar .progress {
+    color: var(--text-dim);
+    font-size: 0.9rem;
+    font-weight: 700;
+}
+.submit-bar .btn {
+    width: auto;
+    padding: 12px 30px;
+    margin: 0;
+}
+
+/* התראת יציאה */
+.exit-alert {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(231, 76, 60, 0.95);
+    z-index: 9999;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    color: white;
+    text-align: center;
+}
+.exit-alert.show { display: flex; }
+.exit-alert-content { max-width: 480px; }
+.exit-alert h2 { font-size: 2rem; margin-bottom: 16px; }
+.exit-alert p { font-size: 1.05rem; margin-bottom: 16px; line-height: 1.6; }
+.exit-alert .count {
+    background: white;
+    color: var(--danger);
+    padding: 10px 20px;
+    border-radius: 12px;
+    font-weight: 900;
+    font-size: 1.2rem;
+    display: inline-block;
+    margin-bottom: 20px;
+}
+.exit-alert .btn {
+    background: white;
+    color: var(--danger);
+    width: auto;
+    padding: 12px 30px;
+}
+
+/* מסך סיום */
+.result-card {
+    background: white;
+    border-radius: 18px;
+    padding: 32px 24px;
+    text-align: center;
+    max-width: 500px;
+    width: 100%;
+    box-shadow: 0 8px 30px rgba(0,0,0,0.1);
+}
+.result-card .icon { font-size: 4rem; margin-bottom: 12px; }
+.result-card h2 { color: var(--primary); margin-bottom: 16px; }
+.result-card .score-box {
+    background: linear-gradient(135deg, var(--primary), #a29bfe);
+    color: white;
+    padding: 20px;
+    border-radius: 14px;
+    margin: 16px 0;
+}
+.result-card .score-box .num { font-size: 3rem; font-weight: 900; line-height: 1; }
+.result-card .score-box .label { opacity: 0.9; margin-top: 4px; }
+.result-card .meta-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.95rem;
+}
+.result-card .meta-row:last-child { border-bottom: none; }
+</style>
+</head>
+<body>
+
+<!-- מסך טעינה ראשוני -->
+<div class="login-screen" id="loginScreen">
+    <div class="login-card">
+        <h1>🔒 מבחן בקרה</h1>
+        <p class="subtitle" id="loadingMsg">טוען את המבחן...</p>
+        <div id="loginError"></div>
+    </div>
+</div>
+
+<!-- מסך הוראות והתחלה -->
+<div class="info-screen" id="infoScreen" style="display:none;">
+    <div class="login-card">
+        <h1>📋 הוראות המבחן</h1>
+        <p class="subtitle" id="welcomeText">שלום</p>
+
+        <div class="test-meta">
+            <div class="row"><span>שם המבחן:</span><strong id="metaTitle2">-</strong></div>
+            <div class="row"><span>זמן:</span><strong id="metaTime2">-</strong></div>
+            <div class="row"><span>שאלות:</span><strong id="metaQuestions2">-</strong></div>
+            <div class="row"><span>מקסימום ניסיונות:</span><strong id="metaAttempts">-</strong></div>
+            <div class="row"><span>הניסיון הנוכחי:</span><strong id="metaCurrentAttempt">-</strong></div>
+        </div>
+
+        <div class="warning-box">
+            <strong>⚠️ חשוב לדעת:</strong>
+            <ul>
+                <li>המבחן יעבור למסך מלא בלחיצה על "התחל"</li>
+                <li>יציאה מהמסך תיחשב כניסיון העתקה ותיספר</li>
+                <li>לאחר <strong id="warnExits">3</strong> יציאות - המבחן יוגש אוטומטית</li>
+                <li>הטיימר ימשיך גם אם תצא מהמסך</li>
+                <li>בסיום הזמן - המבחן יוגש אוטומטית</li>
+            </ul>
+        </div>
+
+        <button class="btn btn-success" onclick="startExam()">▶️ התחל מבחן</button>
+        <div id="infoError"></div>
+    </div>
+</div>
+
+<!-- מסך המבחן -->
+<div class="exam-screen" id="examScreen">
+    <div class="exam-header">
+        <div class="exam-title" id="examTitle">-</div>
+        <div class="exam-info">
+            <div class="exit-counter" id="exitCounter">יציאות: 0</div>
+            <div class="timer" id="timer">--:--</div>
+        </div>
+    </div>
+    
+    <div class="exam-body" id="examBody"></div>
+
+    <div class="submit-bar">
+        <div class="progress" id="progressText">0 מתוך 0 ענו</div>
+        <button class="btn btn-success" onclick="submitExam(false)">✅ הגש מבחן</button>
+    </div>
+</div>
+
+<!-- התראת יציאה -->
+<div class="exit-alert" id="exitAlert">
+    <div class="exit-alert-content">
+        <h2>⚠️ זוהתה יציאה מהמבחן!</h2>
+        <p>הוצאת את הדפדפן ממסך מלא או עברת לחלון אחר.</p>
+        <div class="count">מספר יציאות: <span id="alertExitCount">0</span></div>
+        <p>פעולה זו נרשמת ותוצג למורה.</p>
+        <p id="alertWarn"></p>
+        <button class="btn" onclick="returnToExam()">חזור למבחן</button>
+    </div>
+</div>
+
+<!-- מסך סיום -->
+<div class="info-screen" id="resultScreen" style="display:none;">
+    <div class="result-card">
+        <div class="icon" id="resultIcon">✅</div>
+        <h2 id="resultTitle">המבחן הוגש בהצלחה</h2>
+        
+        <div class="score-box" id="scoreBox">
+            <div class="num"><span id="scoreNum">0</span> / <span id="scoreMax">0</span></div>
+            <div class="label">נקודות מהשאלות האמריקאיות</div>
+        </div>
+        
+        <div style="background:var(--bg);padding:14px;border-radius:10px;margin:14px 0;">
+            <div class="meta-row"><span>זמן הגשה:</span><strong id="resultDuration">-</strong></div>
+            <div class="meta-row"><span>יציאות מהמבחן:</span><strong id="resultExits">-</strong></div>
+            <div class="meta-row" id="resultLockedRow" style="display:none;"><span>סטטוס:</span><strong style="color:var(--danger);">ננעל אוטומטית</strong></div>
+        </div>
+
+        <p style="color:var(--text-dim);font-size:0.95rem;margin:12px 0;">
+            התשובות הפתוחות יבדקו על ידי המורה
+        </p>
+
+        <button class="btn" onclick="window.close(); window.location.href='/';">סיום</button>
+    </div>
+</div>
+
+<script>
+var SUPABASE_URL = 'https://eubgzfkkovxgijhrmnif.supabase.co';
+var SUPABASE_KEY = 'sb_publishable_vJ768fOwYWiDWeYsBBR45g_4NM4s55p';
+
+var currentTest = null;
+var currentStudent = null;
+var currentAttempt = null;
+var attemptId = null;
+var startTime = 0;
+var timerInterval = null;
+var timeLeftSeconds = 0;
+var exitCount = 0;
+var examStarted = false;
+var examSubmitted = false;
+var answers = {};
+
+// ========== Supabase helpers ==========
+async function sbGet(table, params) {
+    var r = await fetch(SUPABASE_URL + '/rest/v1/' + table + (params || ''), {
+        headers: { apikey: SUPABASE_KEY, Authorization: 'Bearer ' + SUPABASE_KEY }
+    });
+    return r.json();
+}
+async function sbInsert(table, data) {
+    var r = await fetch(SUPABASE_URL + '/rest/v1/' + table, {
+        method: 'POST',
+        headers: { apikey: SUPABASE_KEY, Authorization: 'Bearer ' + SUPABASE_KEY, 'Content-Type': 'application/json', Prefer: 'return=representation' },
+        body: JSON.stringify(data)
+    });
+    return r.json();
+}
+async function sbUpdate(table, where, data) {
+    var r = await fetch(SUPABASE_URL + '/rest/v1/' + table + '?' + where, {
+        method: 'PATCH',
+        headers: { apikey: SUPABASE_KEY, Authorization: 'Bearer ' + SUPABASE_KEY, 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+    });
+    return r.ok;
+}
+
+// ========== טעינת המבחן ופרטי התלמיד מה-URL ==========
+async function loadTest() {
+    var params = new URLSearchParams(window.location.search);
+    var testId = params.get('id');
+    var studentId = params.get('student');
+    
+    if (!testId || !studentId) {
+        showLoginError('קישור לא תקין. חזור למערכת המטלות והיכנס שוב.');
+        return;
+    }
+    
+    try {
+        // טעינת המבחן
+        var tests = await sbGet('mavchanim', '?id=eq.' + testId + '&is_active=eq.true');
+        if (!tests || !tests.length) {
+            showLoginError('המבחן לא נמצא או שאינו פעיל');
+            return;
+        }
+        currentTest = tests[0];
+        
+        // טעינת פרטי התלמיד
+        var students = await sbGet('students', '?id=eq.' + studentId);
+        if (!students || !students.length) {
+            showLoginError('תעודת זהות לא רשומה במערכת');
+            return;
+        }
+        currentStudent = students[0];
+        
+        // בדיקה שהוא בכיתה הרלוונטית
+        if (currentTest.classes) {
+            var allowedClasses = currentTest.classes.split(',').map(function(c) { return c.trim().toLowerCase(); });
+            var studentClass = (currentStudent.class || '').toLowerCase();
+            if (allowedClasses.length && allowedClasses[0] && !allowedClasses.includes(studentClass)) {
+                showLoginError('המבחן לא מיועד לכיתה שלך (' + currentStudent.class + ')');
+                return;
+            }
+        }
+
+        // בדיקה שהוא ברשימה הספציפית
+        if (currentTest.specific_students && Array.isArray(currentTest.specific_students) && currentTest.specific_students.length) {
+            if (!currentTest.specific_students.includes(studentId)) {
+                showLoginError('המבחן לא מיועד לך');
+                return;
+            }
+        }
+
+        // בדיקת מספר ניסיונות שכבר נעשו
+        var existingAttempts = await sbGet('mavchan_attempts', '?mavchan_id=eq.' + testId + '&student_id=eq.' + studentId + '&order=started_at.desc');
+        var completedAttempts = (existingAttempts || []).filter(function(a) { return a.submitted_at; }).length;
+        var maxAttempts = currentTest.max_attempts || 1;
+        
+        if (completedAttempts >= maxAttempts) {
+            showLoginError('כבר השלמת את מספר הניסיונות המותר (' + maxAttempts + ')');
+            return;
+        }
+        
+        var currentAttemptNum = completedAttempts + 1;
+
+        // עדכון מסך ההוראות והצגתו
+        document.getElementById('welcomeText').textContent = 'שלום, ' + currentStudent.name;
+        document.getElementById('metaTitle2').textContent = currentTest.title;
+        document.getElementById('metaTime2').textContent = currentTest.time_limit_minutes + ' דקות';
+        var qCount = (currentTest.questions || []).filter(function(q) { return q.type !== 'label'; }).length;
+        document.getElementById('metaQuestions2').textContent = qCount;
+        document.getElementById('metaAttempts').textContent = maxAttempts;
+        document.getElementById('metaCurrentAttempt').textContent = currentAttemptNum + ' / ' + maxAttempts;
+        document.getElementById('warnExits').textContent = currentTest.lock_after_exits || 3;
+
+        // מעבר ישיר למסך הוראות
+        document.getElementById('loginScreen').style.display = 'none';
+        document.getElementById('infoScreen').style.display = 'flex';
+        
+    } catch (err) {
+        showLoginError('שגיאה בטעינה: ' + err.message);
+    }
+}
+
+// ========== עזרי הצגה ==========
+function showLoginError(msg) {
+    document.getElementById('loadingMsg').style.display = 'none';
+    document.getElementById('loginError').innerHTML = '<div class="error-msg">⚠️ ' + msg + '</div>' +
+        '<button class="btn" onclick="window.location.href=\'./matalot-supabase.html\'" style="margin-top:14px;">חזור למערכת המטלות</button>';
+}
+function showInfoError(msg) {
+    document.getElementById('infoError').innerHTML = '<div class="error-msg">⚠️ ' + msg + '</div>';
+}
+
+// ========== התחלת המבחן ==========
+async function startExam() {
+    try {
+        // יצירת רשומת ניסיון
+        attemptId = 'a_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+        var attempt = {
+            id: attemptId,
+            mavchan_id: currentTest.id,
+            student_id: currentStudent.id,
+            student_name: currentStudent.name,
+            student_class: currentStudent.class,
+            started_at: Date.now(),
+            exit_attempts: 0,
+            answers: {}
+        };
+        await sbInsert('mavchan_attempts', attempt);
+        currentAttempt = attempt;
+
+        // נסיון להיכנס למסך מלא
+        try {
+            var elem = document.documentElement;
+            if (elem.requestFullscreen) await elem.requestFullscreen();
+            else if (elem.webkitRequestFullscreen) await elem.webkitRequestFullscreen();
+            else if (elem.msRequestFullscreen) await elem.msRequestFullscreen();
+        } catch (e) {
+            console.warn('מסך מלא לא נתמך:', e);
+        }
+
+        // התחלת המבחן
+        document.getElementById('infoScreen').style.display = 'none';
+        document.getElementById('examScreen').style.display = 'block';
+        
+        document.getElementById('examTitle').textContent = currentTest.title;
+        renderQuestions();
+        
+        startTime = Date.now();
+        timeLeftSeconds = (currentTest.time_limit_minutes || 15) * 60;
+        examStarted = true;
+        startTimer();
+        setupExitDetection();
+
+    } catch (err) {
+        showInfoError('שגיאה בהתחלת המבחן: ' + err.message);
+    }
+}
+
+function renderQuestions() {
+    var body = document.getElementById('examBody');
+    body.innerHTML = '';
+    var questions = currentTest.questions || [];
+    var qNum = 0;
+
+    questions.forEach(function(q, idx) {
+        var card = document.createElement('div');
+        card.className = 'question-card';
+
+        if (q.type === 'label') {
+            card.innerHTML = '<div style="color:var(--text-dim);font-size:0.95rem;line-height:1.6;">' + escapeHtml(q.text || '') + '</div>';
+            body.appendChild(card);
+            return;
+        }
+
+        qNum++;
+        var qHtml = '<div class="question-text"><span class="question-num">' + qNum + '</span>' + escapeHtml(q.text || '');
+        if (q.points) qHtml += '<span class="question-points">(' + q.points + ' נק\')</span>';
+        qHtml += '</div>';
+
+        if (q.type === 'choice' || q.type === 'multiple_choice') {
+            (q.options || []).forEach(function(opt, optIdx) {
+                qHtml += '<label class="choice-option" data-q="' + idx + '" data-opt="' + optIdx + '" onclick="selectChoice(' + idx + ',' + optIdx + ')">' +
+                    '<input type="radio" name="q_' + idx + '" value="' + escapeHtml(opt) + '">' +
+                    '<span>' + escapeHtml(opt) + '</span>' +
+                '</label>';
+            });
+        } else if (q.type === 'yesno') {
+            ['כן', 'לא'].forEach(function(opt) {
+                qHtml += '<label class="choice-option" onclick="selectYesNo(' + idx + ',\'' + opt + '\')">' +
+                    '<input type="radio" name="q_' + idx + '" value="' + opt + '">' +
+                    '<span>' + opt + '</span>' +
+                '</label>';
+            });
+        } else if (q.type === 'number') {
+            qHtml += '<input type="number" id="ans_' + idx + '" oninput="saveAnswer(' + idx + ',this.value)" placeholder="הזן מספר">';
+        } else {
+            // text - שאלה פתוחה
+            qHtml += '<textarea id="ans_' + idx + '" rows="4" oninput="saveAnswer(' + idx + ',this.value)" placeholder="הזן את תשובתך"></textarea>';
+        }
+
+        card.innerHTML = qHtml;
+        body.appendChild(card);
+    });
+
+    updateProgress();
+}
+
+function selectChoice(qIdx, optIdx) {
+    var q = currentTest.questions[qIdx];
+    var opt = (q.options || [])[optIdx];
+    if (!opt) return;
+    answers['q_' + qIdx] = opt;
+    
+    // עדכון UI
+    document.querySelectorAll('[data-q="' + qIdx + '"]').forEach(function(el) {
+        el.classList.remove('selected');
+    });
+    var selectedEl = document.querySelector('[data-q="' + qIdx + '"][data-opt="' + optIdx + '"]');
+    if (selectedEl) {
+        selectedEl.classList.add('selected');
+        var input = selectedEl.querySelector('input');
+        if (input) input.checked = true;
+    }
+    saveAnswerToDb();
+    updateProgress();
+}
+
+function selectYesNo(qIdx, val) {
+    answers['q_' + qIdx] = val;
+    saveAnswerToDb();
+    updateProgress();
+}
+
+function saveAnswer(qIdx, val) {
+    if (val) answers['q_' + qIdx] = val;
+    else delete answers['q_' + qIdx];
+    saveAnswerToDb();
+    updateProgress();
+}
+
+var saveTimeout = null;
+function saveAnswerToDb() {
+    if (saveTimeout) clearTimeout(saveTimeout);
+    saveTimeout = setTimeout(function() {
+        if (attemptId) {
+            sbUpdate('mavchan_attempts', 'id=eq.' + attemptId, { answers: answers });
+        }
+    }, 1500);
+}
+
+function updateProgress() {
+    var totalQs = (currentTest.questions || []).filter(function(q) { return q.type !== 'label'; }).length;
+    var answered = Object.keys(answers).filter(function(k) { return answers[k]; }).length;
+    document.getElementById('progressText').textContent = answered + ' מתוך ' + totalQs + ' ענו';
+}
+
+// ========== טיימר ==========
+function startTimer() {
+    updateTimerDisplay();
+    timerInterval = setInterval(function() {
+        timeLeftSeconds--;
+        updateTimerDisplay();
+        if (timeLeftSeconds <= 0) {
+            clearInterval(timerInterval);
+            alert('הזמן נגמר! המבחן יוגש אוטומטית.');
+            submitExam(true);
+        }
+    }, 1000);
+}
+
+function updateTimerDisplay() {
+    var min = Math.floor(timeLeftSeconds / 60);
+    var sec = timeLeftSeconds % 60;
+    var el = document.getElementById('timer');
+    el.textContent = String(min).padStart(2, '0') + ':' + String(sec).padStart(2, '0');
+    
+    el.classList.remove('warning', 'danger');
+    if (timeLeftSeconds <= 60) el.classList.add('danger');
+    else if (timeLeftSeconds <= 180) el.classList.add('warning');
+}
+
+// ========== מעקב יציאות ==========
+function setupExitDetection() {
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('blur', handleBlur);
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+    
+    // מניעת F12, Ctrl+Shift+I, Ctrl+U וכו' (לא בלתי עביר)
+    document.addEventListener('contextmenu', function(e) {
+        if (examStarted && !examSubmitted) e.preventDefault();
+    });
+}
+
+var lastExitTime = 0;
+function handleVisibilityChange() {
+    if (!examStarted || examSubmitted) return;
+    if (document.hidden) {
+        recordExit();
+    }
+}
+function handleBlur() {
+    if (!examStarted || examSubmitted) return;
+    // התעלמות אם זה רק 100ms (אולי click על element)
+    setTimeout(function() {
+        if (!document.hasFocus() && examStarted && !examSubmitted) {
+            recordExit();
+        }
+    }, 200);
+}
+function handleFullscreenChange() {
+    if (!examStarted || examSubmitted) return;
+    var isFullscreen = !!(document.fullscreenElement || document.webkitFullscreenElement);
+    if (!isFullscreen) {
+        recordExit();
+    }
+}
+
+function recordExit() {
+    // מניעת ספירה כפולה
+    var now = Date.now();
+    if (now - lastExitTime < 1000) return;
+    lastExitTime = now;
+    
+    exitCount++;
+    document.getElementById('exitCounter').textContent = 'יציאות: ' + exitCount;
+    document.getElementById('exitCounter').classList.add('danger');
+    
+    // עדכון בDB
+    if (attemptId) {
+        sbUpdate('mavchan_attempts', 'id=eq.' + attemptId, { exit_attempts: exitCount });
+    }
+
+    // האם להציג התראה
+    var maxExits = currentTest.lock_after_exits || 3;
+    document.getElementById('alertExitCount').textContent = exitCount;
+    
+    if (exitCount >= maxExits) {
+        document.getElementById('alertWarn').innerHTML = '<strong>הגעת למקסימום יציאות. המבחן יוגש כעת אוטומטית.</strong>';
+        document.getElementById('exitAlert').classList.add('show');
+        setTimeout(function() {
+            submitExam(true);
+        }, 3000);
+    } else {
+        document.getElementById('alertWarn').innerHTML = 'יציאות נוספות: ' + (maxExits - exitCount);
+        document.getElementById('exitAlert').classList.add('show');
+    }
+}
+
+function returnToExam() {
+    document.getElementById('exitAlert').classList.remove('show');
+    // נסיון חזרה למסך מלא
+    try {
+        var elem = document.documentElement;
+        if (elem.requestFullscreen) elem.requestFullscreen();
+        else if (elem.webkitRequestFullscreen) elem.webkitRequestFullscreen();
+    } catch (e) {}
+}
+
+// ========== הגשת המבחן ==========
+async function submitExam(autoLocked) {
+    if (examSubmitted) return;
+    
+    if (!autoLocked) {
+        var totalQs = (currentTest.questions || []).filter(function(q) { return q.type !== 'label'; }).length;
+        var answered = Object.keys(answers).filter(function(k) { return answers[k]; }).length;
+        if (answered < totalQs) {
+            if (!confirm('ענית על ' + answered + ' מתוך ' + totalQs + ' שאלות. להגיש בכל זאת?')) {
+                return;
+            }
+        }
+    }
+    
+    examSubmitted = true;
+    if (timerInterval) clearInterval(timerInterval);
+    
+    // יציאה ממסך מלא
+    try {
+        if (document.exitFullscreen) document.exitFullscreen();
+        else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+    } catch (e) {}
+
+    // חישוב ציון אוטומטי לאמריקאיות
+    var scoreData = calculateScore();
+    
+    var duration = Math.round((Date.now() - startTime) / 1000);
+    var update = {
+        submitted_at: Date.now(),
+        duration_seconds: duration,
+        answers: answers,
+        score: scoreData.score,
+        max_score: scoreData.max,
+        exit_attempts: exitCount,
+        was_locked: !!autoLocked
+    };
+    
+    await sbUpdate('mavchan_attempts', 'id=eq.' + attemptId, update);
+    
+    // הצגת מסך תוצאה
+    document.getElementById('examScreen').style.display = 'none';
+    document.getElementById('exitAlert').classList.remove('show');
+    document.getElementById('resultScreen').style.display = 'flex';
+    
+    if (autoLocked) {
+        document.getElementById('resultIcon').textContent = '🔒';
+        document.getElementById('resultTitle').textContent = 'המבחן ננעל אוטומטית';
+        document.getElementById('resultLockedRow').style.display = 'flex';
+    }
+    
+    document.getElementById('scoreNum').textContent = scoreData.score;
+    document.getElementById('scoreMax').textContent = scoreData.max;
+    if (scoreData.max === 0) {
+        document.getElementById('scoreBox').style.display = 'none';
+    }
+    
+    var minutes = Math.floor(duration / 60);
+    var seconds = duration % 60;
+    document.getElementById('resultDuration').textContent = minutes + ' דק\' ' + seconds + ' שנ\'';
+    document.getElementById('resultExits').textContent = exitCount;
+}
+
+function calculateScore() {
+    var score = 0;
+    var max = 0;
+    (currentTest.questions || []).forEach(function(q, idx) {
+        if (q.type === 'label' || q.type === 'text' || q.type === 'number') return;
+        var points = q.points || 1;
+        max += points;
+        var ans = answers['q_' + idx];
+        if (q.type === 'choice' || q.type === 'multiple_choice') {
+            if (q.correct_answer && ans === q.correct_answer) score += points;
+        } else if (q.type === 'yesno') {
+            if (q.correct_answer && ans === q.correct_answer) score += points;
+        }
+    });
+    return { score: score, max: max };
+}
+
+function escapeHtml(s) {
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+// טעינה ראשונית
+window.addEventListener('DOMContentLoaded', loadTest);
+
+// אזהרה לפני סגירת הדף תוך כדי מבחן
+window.addEventListener('beforeunload', function(e) {
+    if (examStarted && !examSubmitted) {
+        e.preventDefault();
+        e.returnValue = 'המבחן עדיין פעיל. אם תצא תאבד את המידע.';
+        return e.returnValue;
+    }
+});
+</script>
+
+</body>
+</html>
