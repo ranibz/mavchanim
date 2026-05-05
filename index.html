@@ -134,7 +134,7 @@ body{font-family:"Rubik",sans-serif;background:var(--bg);color:var(--text);min-h
   <div class="logo-box"><span class="material-icons-round">assignment</span></div>
   <h1>מערכת מטלות</h1>
   <p>הגשת עבודות דיגיטלית</p>
-  <div class="credit">מערכת מבחני בקרה (עם AI ומחוון) • רני בן זאב • v1.2</div>
+  <div class="credit">מערכת מבחני בקרה (עם AI ומחוון) • רני בן זאב • v1.3</div>
 </div>
 <div class="role-cards">
   <button class="role-card rc-student active" onclick="switchRole('student')"><span class="rc-emoji">🎓</span><span class="rc-label">תלמיד</span></button>
@@ -2218,7 +2218,19 @@ async function loadStudentMavchanim() {
                 completed.forEach(function(a, idx) {
                     var dur = a.duration_seconds ? Math.floor(a.duration_seconds / 60) + ' דק\'' : '';
                     var lockNote = a.was_locked ? ' <span style="color:#dc2626;">🔒 ננעל</span>' : '';
-                    html += '<div style="color:#6b7280;">ניסיון ' + (idx + 1) + ': ציון אוטומטי ' + (a.score || 0) + '/' + (a.max_score || 0) + ' · ' + dur + ' · ' + (a.exit_attempts || 0) + ' יציאות' + lockNote + '</div>';
+                    
+                    // חישוב ציון משוקלל הכולל הערכה ידנית של מורה (אם קיימת)
+                    var displayScore = a.score || 0;
+                    var displayMax = a.max_score || 0;
+                    var hasManualGrades = a.manual_grades && Object.keys(a.manual_grades).length > 0;
+                    var hasAiGrades = a.ai_grades && Object.keys(a.ai_grades).length > 0;
+                    
+                    html += '<div style="color:#6b7280;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">';
+                    html += '<span>ניסיון ' + (idx + 1) + ': ציון ' + displayScore + '/' + displayMax + ' · ' + dur + ' · ' + (a.exit_attempts || 0) + ' יציאות' + lockNote + '</span>';
+                    if (hasManualGrades || hasAiGrades) {
+                        html += '<button onclick="showStudentAttemptDetails(\'' + a.id + '\')" style="padding:3px 10px;background:#3b82f6;color:white;border:none;border-radius:6px;font-size:0.8rem;cursor:pointer;">📋 פרטים</button>';
+                    }
+                    html += '</div>';
                 });
                 html += '</div>';
             }
@@ -2239,7 +2251,117 @@ function escapeHtml(s) {
     return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-// קריאה ל-loadStudentMavchanim כל פעם ש-loadStudentAssignments נקרא
+// הצגת פרטי ניסיון מבחן לתלמיד עם ציוני AI/מורה
+async function showStudentAttemptDetails(attemptId) {
+    try {
+        var atts = await sbFetch('mavchan_attempts', '?id=eq.' + attemptId);
+        if (!atts.length) return toast('הניסיון לא נמצא');
+        var a = atts[0];
+        
+        var tests = await sbFetch('mavchanim', '?id=eq.' + a.mavchan_id);
+        if (!tests.length) return toast('המבחן לא נמצא');
+        var test = tests[0];
+        
+        var aiGrades = a.ai_grades || {};
+        var manualGrades = a.manual_grades || {};
+        
+        // חישוב ציון סופי (משוקלל - מורה > AI > אוטומטי)
+        var finalScore = 0;
+        var finalMax = 0;
+        
+        var html = '<div style="background:white;padding:20px;border-radius:12px;max-width:700px;margin:0 auto;">';
+        html += '<h2 style="margin:0 0 12px;color:#1f2937;">📋 פירוט תוצאות: ' + escapeHtmlMv(test.title) + '</h2>';
+        
+        var scoreSummaryEl = '<div id="scoreSummaryStudent" style="background:linear-gradient(135deg,#dbeafe,#ede9fe);padding:14px;border-radius:10px;margin-bottom:16px;font-size:1.1rem;font-weight:700;color:#1e40af;text-align:center;"></div>';
+        html += scoreSummaryEl;
+        
+        var qNum = 0;
+        (test.questions || []).forEach(function(q, idx) {
+            if (q.type === 'label') return;
+            qNum++;
+            var ans = (a.answers || {})['q_' + idx];
+            var maxPts = q.points || (q.type === 'choice' ? 5 : 10);
+            finalMax += maxPts;
+            
+            html += '<div style="background:#f9fafb;padding:14px;border-radius:10px;margin-bottom:10px;border-right:4px solid #e5e7eb;">';
+            html += '<div style="font-weight:700;margin-bottom:8px;">' + qNum + '. ' + escapeHtmlMv(q.text || '') + ' <span style="color:#6b7280;font-size:0.85rem;">(' + maxPts + ' נק\')</span></div>';
+            
+            // התשובה שלך
+            html += '<div style="background:white;padding:8px 10px;border-radius:6px;margin-bottom:8px;color:#374151;">';
+            html += '<span style="font-weight:600;color:#6b7280;font-size:0.85rem;">תשובתך: </span>';
+            html += ans ? escapeHtmlMv(ans) : '<i style="color:#9ca3af;">לא ענית</i>';
+            html += '</div>';
+            
+            // לבחירה מרובה - הצגת תשובה נכונה
+            if (q.type === 'choice') {
+                if (ans === q.correct_answer) {
+                    html += '<div style="color:#059669;font-weight:700;">✅ תשובה נכונה! (+' + maxPts + ' נקודות)</div>';
+                    finalScore += maxPts;
+                } else {
+                    html += '<div style="color:#dc2626;">❌ תשובה לא נכונה. התשובה הנכונה: <b>' + escapeHtmlMv(q.correct_answer || '') + '</b></div>';
+                }
+            }
+            
+            // לשאלה פתוחה - הצגת הערכת המורה (אם יש) או AI
+            if (q.type === 'text') {
+                var grade = null;
+                var graderType = '';
+                
+                // עדיפות: הערכת מורה > הערכת AI
+                if (manualGrades['q_' + idx] !== undefined && manualGrades['q_' + idx].score !== undefined) {
+                    grade = manualGrades['q_' + idx];
+                    graderType = '👨‍🏫 הערכת המורה';
+                } else if (aiGrades['q_' + idx] !== undefined) {
+                    grade = aiGrades['q_' + idx];
+                    graderType = '🤖 הערכת AI';
+                }
+                
+                if (grade) {
+                    var color = grade.score >= maxPts * 0.8 ? '#059669' : (grade.score >= maxPts * 0.5 ? '#f59e0b' : '#dc2626');
+                    html += '<div style="background:linear-gradient(135deg,#fef3c7,#fde68a);padding:10px;border-radius:8px;border-right:4px solid ' + color + ';">';
+                    html += '<div style="font-weight:700;color:' + color + ';margin-bottom:4px;">' + graderType + ': ' + grade.score + '/' + maxPts + ' נקודות</div>';
+                    if (grade.feedback) {
+                        html += '<div style="color:#374151;font-size:0.95rem;">' + escapeHtmlMv(grade.feedback) + '</div>';
+                    }
+                    html += '</div>';
+                    finalScore += grade.score;
+                } else {
+                    html += '<div style="background:#fef3c7;padding:8px;border-radius:6px;color:#92400e;font-size:0.9rem;">⏳ עדיין לא נבדקה</div>';
+                }
+            }
+            
+            html += '</div>';
+        });
+        
+        html += '<button onclick="closeStudentAttemptDetails()" style="width:100%;padding:12px;background:#3b82f6;color:white;border:none;border-radius:10px;font-weight:700;cursor:pointer;font-size:1rem;">סגור</button>';
+        html += '</div>';
+        
+        // הצגת מודל
+        var modal = document.createElement('div');
+        modal.id = 'studentAttemptModal';
+        modal.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:9999;display:flex;align-items:flex-start;justify-content:center;overflow-y:auto;padding:20px;';
+        modal.innerHTML = html;
+        modal.onclick = function(e) { if (e.target === modal) closeStudentAttemptDetails(); };
+        document.body.appendChild(modal);
+        
+        // עדכון סיכום ציון
+        var sumEl = document.getElementById('scoreSummaryStudent');
+        if (sumEl) {
+            var pct = finalMax ? Math.round((finalScore / finalMax) * 100) : 0;
+            sumEl.innerHTML = '🎯 ציון כולל: ' + finalScore + '/' + finalMax + ' (' + pct + '%)';
+        }
+        
+    } catch (err) {
+        toast('שגיאה: ' + err.message);
+    }
+}
+
+function closeStudentAttemptDetails() {
+    var m = document.getElementById('studentAttemptModal');
+    if (m) m.remove();
+}
+
+// הצגת תוצאות ניסיונות קודמים
 var _origLoadStudentAssignments = loadStudentAssignments;
 loadStudentAssignments = async function() {
     await _origLoadStudentAssignments.apply(this, arguments);
